@@ -7,6 +7,8 @@
 
 Send text, voice, photos, and documents. Claude streams responses in real-time, showing you exactly what tools it's using as it works.
 
+![Demo](assets/demo.gif)
+
 ## Why This Exists
 
 Claude Code is powerful, but you need a terminal. This bot lets you message Claude from your phone while walking, driving, or away from your desk.
