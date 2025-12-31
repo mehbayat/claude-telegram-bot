@@ -1,9 +1,9 @@
-# Claude Telegram Bot (TypeScript)
+# Claude Telegram Bot
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Bun](https://img.shields.io/badge/Bun-1.0+-black.svg)](https://bun.sh/)
 
-Turn Claude into your personal assistant, accessible from anywhere via Telegram.
+**Turn Claude Code into your personal assistant, accessible from anywhere via Telegram.**
 
 Send text, voice, photos, and documents. Claude streams responses in real-time, showing you exactly what tools it's using as it works.
 
@@ -21,14 +21,14 @@ With the right setup, you're not just chatting with Claude - you're delegating t
 
 ## Features
 
-- **Text**: Ask questions, give instructions, have conversations
-- **Voice**: Speak naturally - transcribed via OpenAI and processed by Claude
-- **Photos**: Send screenshots, documents, or anything visual for analysis
-- **Documents**: PDFs and text files are extracted and readable by Claude
-- **Session persistence**: Conversations continue across messages
-- **Message queuing**: Send multiple messages while Claude works - they queue up automatically. Prefix with `!` or use `/stop` to interrupt and send immediately
-- **Extended thinking**: Trigger Claude's reasoning by using words like "think" or "reason" - you'll see its thought process as it works (configurable via `THINKING_TRIGGER_KEYWORDS`)
-- **Interactive buttons**: Claude can present options as tappable inline buttons via the built-in `ask_user` MCP tool
+- 💬 **Text**: Ask questions, give instructions, have conversations
+- 🎤 **Voice**: Speak naturally - transcribed via OpenAI and processed by Claude
+- 📸 **Photos**: Send screenshots, documents, or anything visual for analysis
+- 📄 **Documents**: PDFs and text files are extracted and readable by Claude
+- 🔄 **Session persistence**: Conversations continue across messages
+- 📨 **Message queuing**: Send multiple messages while Claude works - they queue up automatically. Prefix with `!` or use `/stop` to interrupt and send immediately
+- 🧠 **Extended thinking**: Trigger Claude's reasoning by using words like "think" or "reason" - you'll see its thought process as it works (configurable via `THINKING_TRIGGER_KEYWORDS`)
+- 🔘 **Interactive buttons**: Claude can present options as tappable inline buttons via the built-in `ask_user` MCP tool
 
 ## Quick Start
 
@@ -54,14 +54,15 @@ bun run src/index.ts
 
 The bot uses the `@anthropic-ai/claude-agent-sdk` which supports two authentication methods:
 
-| Method | Best For | Setup |
-|--------|----------|-------|
-| **CLI Auth** (recommended) | High usage, cost-effective | Run `claude` once to authenticate |
-| **API Key** | CI/CD, environments without Claude Code | Set `ANTHROPIC_API_KEY` in `.env` |
+| Method                     | Best For                                | Setup                             |
+| -------------------------- | --------------------------------------- | --------------------------------- |
+| **CLI Auth** (recommended) | High usage, cost-effective              | Run `claude` once to authenticate |
+| **API Key**                | CI/CD, environments without Claude Code | Set `ANTHROPIC_API_KEY` in `.env` |
 
 **CLI Auth** (recommended): The SDK automatically uses your Claude Code login. Just ensure you've run `claude` at least once and authenticated. This uses your Claude Code subscription which is much more cost-effective for heavy usage.
 
 **API Key**: For environments where Claude Code isn't installed. Get a key from [console.anthropic.com](https://console.anthropic.com/) and add to `.env`:
+
 ```bash
 ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
@@ -116,14 +117,14 @@ The bot includes a built-in `ask_user` MCP server that lets Claude present optio
 
 ## Bot Commands
 
-| Command | Description |
-|---------|-------------|
-| `/start` | Show status and your user ID |
-| `/new` | Start a fresh session |
-| `/resume` | Resume last session after restart |
-| `/stop` | Interrupt current query |
-| `/status` | Check what Claude is doing |
-| `/restart` | Restart the bot |
+| Command    | Description                       |
+| ---------- | --------------------------------- |
+| `/start`   | Show status and your user ID      |
+| `/new`     | Start a fresh session             |
+| `/resume`  | Resume last session after restart |
+| `/stop`    | Interrupt current query           |
+| `/status`  | Check what Claude is doing        |
+| `/restart` | Restart the bot                   |
 
 ## Running as a Service (macOS)
 
@@ -136,6 +137,7 @@ launchctl load ~/Library/LaunchAgents/com.claude-telegram-ts.plist
 The bot will start automatically on login and restart if it crashes.
 
 **Logs:**
+
 ```bash
 tail -f /tmp/claude-telegram-bot-ts.log   # stdout
 tail -f /tmp/claude-telegram-bot-ts.err   # stderr
@@ -167,26 +169,31 @@ Multiple layers protect against misuse:
 ## Troubleshooting
 
 **Bot doesn't respond**
+
 - Verify your user ID is in `TELEGRAM_ALLOWED_USERS`
 - Check the bot token is correct
 - Look at logs: `tail -f /tmp/claude-telegram-bot-ts.err`
 - Ensure the bot process is running
 
 **Claude authentication issues**
+
 - For CLI auth: run `claude` in terminal and verify you're logged in
 - For API key: check `ANTHROPIC_API_KEY` is set and starts with `sk-ant-api03-`
 - Verify the API key has credits at [console.anthropic.com](https://console.anthropic.com/)
 
 **Voice messages fail**
+
 - Ensure `OPENAI_API_KEY` is set in `.env`
 - Verify the key is valid and has credits
 
 **Claude can't access files**
+
 - Check `CLAUDE_WORKING_DIR` points to an existing directory
 - Verify `ALLOWED_PATHS` includes directories you want Claude to access
 - Ensure the bot process has read/write permissions
 
 **MCP tools not working**
+
 - Verify `mcp-config.ts` exists and exports properly
 - Check that MCP server dependencies are installed
 - Look for MCP errors in the logs
