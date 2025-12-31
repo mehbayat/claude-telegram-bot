@@ -132,6 +132,7 @@ export async function handlePhoto(ctx: Context): Promise<void> {
   // 2. For single photos, show status and rate limit early
   let statusMsg: Awaited<ReturnType<typeof ctx.reply>> | null = null;
   if (!mediaGroupId) {
+    console.log(`Received photo from @${username}`);
     // Rate limit
     const [allowed, retryAfter] = rateLimiter.check(userId);
     if (!allowed) {

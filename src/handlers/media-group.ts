@@ -62,6 +62,8 @@ export function createMediaGroupBuffer(config: MediaGroupConfig) {
 
     if (!userId || !chatId) return;
 
+    console.log(`Processing ${group.items.length} ${config.itemLabelPlural} from @${username}`);
+
     // Update status message
     if (group.statusMsg) {
       try {
@@ -110,6 +112,7 @@ export function createMediaGroupBuffer(config: MediaGroupConfig) {
       }
 
       // Create new group
+      console.log(`Receiving ${config.itemLabel} album from @${username}`);
       const statusMsg = await ctx.reply(`${config.emoji} Receiving ${config.itemLabelPlural}...`);
 
       pendingGroups.set(mediaGroupId, {

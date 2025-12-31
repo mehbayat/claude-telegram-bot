@@ -321,7 +321,8 @@ class ClaudeSession {
           // Capture usage if available
           if ("usage" in event && event.usage) {
             this.lastUsage = event.usage as TokenUsage;
-            console.log("Usage:", this.lastUsage);
+            const u = this.lastUsage;
+            console.log(`Usage: in=${u.input_tokens} out=${u.output_tokens} cache_read=${u.cache_read_input_tokens || 0} cache_create=${u.cache_creation_input_tokens || 0}`);
           }
         }
       }
