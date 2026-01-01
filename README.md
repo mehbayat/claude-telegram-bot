@@ -182,13 +182,18 @@ bun run --bun tsc --noEmit
 
 ## Security
 
+> **⚠️ Important:** This bot runs Claude Code with **all permission prompts bypassed**. Claude can read, write, and execute commands without confirmation within the allowed paths. This is intentional for a seamless mobile experience, but you should understand the implications before deploying.
+
+**→ [Read the full Security Model](SECURITY.md)** for details on how permissions work and what protections are in place.
+
 Multiple layers protect against misuse:
 
 1. **User allowlist** - Only your Telegram IDs can use the bot
 2. **Intent classification** - AI filter blocks dangerous requests
-3. **Path validation** - File access restricted to allowed directories
-4. **Rate limiting** - Prevents runaway usage
-5. **Audit logging** - All interactions logged
+3. **Path validation** - File access restricted to `ALLOWED_PATHS`
+4. **Command safety** - Destructive patterns like `rm -rf /` are blocked
+5. **Rate limiting** - Prevents runaway usage
+6. **Audit logging** - All interactions logged to `/tmp/claude-telegram-audit.log`
 
 ## Troubleshooting
 

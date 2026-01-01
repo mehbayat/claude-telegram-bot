@@ -2,6 +2,25 @@
 
 This document describes the security architecture of the Claude Telegram Bot.
 
+## Permission Mode: Full Bypass
+
+**This bot runs Claude Code with all permission prompts disabled.**
+
+```typescript
+// src/session.ts
+permissionMode: "bypassPermissions"
+allowDangerouslySkipPermissions: true
+```
+
+This means Claude can:
+- **Read and write files** without asking for confirmation
+- **Execute shell commands** without permission prompts
+- **Use all tools** (Bash, Edit, Write, etc.) autonomously
+
+This is intentional. The bot is designed for personal use from mobile, where confirming every file read or command would be impractical. Instead of per-action prompts, we rely on defense-in-depth with multiple security layers described below.
+
+**This is not configurable** - the bot always runs in bypass mode. If you need permission prompts, use Claude Code directly instead.
+
 ## Threat Model
 
 The bot is designed for **personal use by trusted users**. The primary threats we defend against:
@@ -86,17 +105,35 @@ Customize via `ALLOWED_PATHS` (comma-separated).
 
 ### Layer 5: Command Safety
 
-Dangerous shell commands are blocked as defense-in-depth:
+Dangerous shell commands are blocked as defense-in-depth.
 
-```
-Blocked patterns:
-- rm -rf / (or ~ or $HOME)
-- sudo rm
-- Fork bombs
-- Direct disk writes (> /dev/sd, mkfs, dd if=)
+#### Completely Blocked Patterns
+
+These patterns are **always rejected**, regardless of context:
+
+| Pattern | Reason |
+|---------|--------|
+| `rm -rf /` | System destruction |
+| `rm -rf ~` | Home directory wipe |
+| `rm -rf $HOME` | Home directory wipe |
+| `sudo rm` | Privileged deletion |
+| `:(){ :\|:& };:` | Fork bomb |
+| `> /dev/sd` | Disk overwrite |
+| `mkfs.` | Filesystem formatting |
+| `dd if=` | Raw disk operations |
+
+#### Path-Validated Commands
+
+`rm` commands (that don't match blocked patterns above) are **allowed but path-validated**:
+
+```bash
+rm file.txt              # Allowed if in ALLOWED_PATHS
+rm /etc/passwd           # Blocked - outside ALLOWED_PATHS
+rm -rf ./node_modules    # Allowed if cwd is in ALLOWED_PATHS
+rm -r /tmp/mydir         # Allowed - /tmp is always permitted
 ```
 
-For `rm` commands specifically, each path argument is validated against allowed paths.
+Each path argument is checked against `ALLOWED_PATHS` before execution.
 
 ### Layer 6: System Prompt
 
