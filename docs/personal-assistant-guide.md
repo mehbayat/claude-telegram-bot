@@ -110,7 +110,7 @@ gmail.sh archive <id>         # Archive email
 
 `~/Documents/Notes/` contains:
 
-- `pulse.md` - Daily life digest auto-generated via the `/pulse` command
+- `pulse.md` - Daily life digest auto-generated via the `/life-pulse` command
 - `life-goals.md` - Long-term objectives (separate from pulse)
 - `Me/` - Personal context, measurements, home info
 - `Research/` - Research files and comparisons
@@ -271,78 +271,127 @@ It's like having a personal trainer in my pocket who knows my training history, 
 
 As usual, the better the context, the better the results. So if you have a training plan or training history, make sure those notes are available to Claude.
 
-## Example: Life Pulse Command
+## Example: Life Pulse Command with Subagents
 
 [Commands](https://code.claude.com/docs/en/slash-commands) let you define reusable prompts with dynamic context. They live in `~/.claude/commands/` (global) or `your-project/claude/commands/`.
 
-My personal assistant "fab-dev" folder contains Claude commands, symlinked from `~/.claude/commands/`, so I can ask Claude to add new ones that will be available everywhere, and they can also use the MCPs installed in this folder.
+[Subagents](https://code.claude.com/docs/en/sub-agents) on the other hand are specialized agents that Claude can delegate tasks to. They're defined as markdown files in `.claude/agents/` and each runs with its own context window, which keeps the main conversation lean.
 
-I liked the idea of reading a sort of executive summary of what's on my plate every morning, so I asked Claude to create a `life-pulse.md` command, and also to set it up to run automatically every morning.
+My personal assistant "fab-dev" folder contains both commands and subagents. Commands are symlinked from `~/.claude/commands/` so they're available everywhere, and they can use MCPs and invoke subagents defined in this folder.
 
-This is a simplified version of the command to show you what I mean:
+I always liked the idea of reading a sort of **executive summary of what's on my plate** every morning, so I asked Claude to create a `/life-pulse` command, with a set of specialized subagents, and also to set it up to run automatically every morning.
 
-```markdown
+### Why Subagents?
+
+A complex command like `/life-pulse` needs to gather data from many sources: email, work issues, finances, health metrics, racing stats, web news. If the main agent does all this directly, the context window fills up fast with raw data, and can lead to poor results or missing information.\*
+
+So my pulse command uses **6 subagents** that run in parallel:
+
+| Subagent            | Job                            | Returns                                   |
+| ------------------- | ------------------------------ | ----------------------------------------- |
+| `gmail-digest`      | Analyze inbox & recent emails  | Unread needing attention, orders, threads |
+| `linear-digest`     | Analyze work issues            | In-progress, blockers, up next            |
+| `finance-digest`    | Analyze net worth & allocation | Financial snapshot, time-sensitive items  |
+| `health-digest`     | Analyze Apple Health data      | Brief health check-in                     |
+| `sim-racing-digest` | Analyze race results           | Performance insights                      |
+| `for-you-digest`    | Curate web & Reddit content    | 10-15 interesting items                   |
+
+The main agent then just handles lightweight data (Things tasks, calendar, journal) and **assembles** the subagent outputs into the final digest.
+
+### Subagent Example
+
+Here's what a digest subagent looks like (simplified):
+
+```
 ---
-description: Generate executive life digest from tasks, calendar, notes, and health
-allowed-tools: Bash(date:*), Bash(~/scripts/*), Read, Write, mcp__things__*, mcp__calendar__*
+name: health-digest
+description: Analyzes health metrics and provides a brief check-in. Use for pulse or when user asks about health.
+tools: Bash, Read
+model: haiku
+---
+
+You are a health-conscious friend giving a quick check-in on health metrics.
+
+## Data Gathering
+
+Run the health script:
+~/scripts/health.sh
+
+## Analysis
+
+Look for what's actually notable:
+
+- Sleep significantly better/worse than usual
+- Resting HR trending up (stress) or down (fitness)
+- HRV changes over the past month
+
+## Output
+
+Return a brief check-in (3-5 lines). Write like a friend, not a medical report.
+
+Example: "Sleep's been solid at 7.2h — up from 6.8h last month. Resting HR holding at 54bpm. Activity a bit low this week, might want to get some walks in."
+```
+
+### The Main Pulse Command
+
+Here's a simplified version of the `/life-pulse` command:
+
+````
+---
+description: Generate executive life digest
+allowed-tools: Bash, Read, Write, mcp__things__*, Task
 ---
 
 # Generate Life Pulse
 
-Create a snapshot of my current life by pulling data from various sources.
-
 ## Context
 
 - Current time: !`date "+%A, %Y-%m-%d %H:%M"`
-- Pulse exists: !`[ -f ~/Documents/Notes/pulse.md ] && echo "Yes" || echo "No"`
-
-## Description
-
-This command creates an executive digest by sourcing:
-
-1. **Tasks**: Today's items, upcoming deadlines, active projects
-2. **Calendar**: Events for the next 1-2 weeks
-3. **Notes**: Recent notes to identify themes and top-of-mind items
-4. **Health**: Sleep, activity, and vitals (if available)
 
 ## Implementation
 
-1. **Check Existing Context**:
+1. **Gather Data** (run in parallel):
 
-   - Read `~/Documents/Notes/pulse.md` if it exists (for continuity)
-   - Note what was previously urgent to identify changes
+- Things: `get_today`, `get_upcoming`, `get_projects` (lightweight, main agent handles)
+- Calendar: `~/scripts/calendar.sh range <today> <today+28>`
+- Journal: Read 2-3 recent entries
+- **Email**: Invoke `gmail-digest` subagent (do NOT run in background)
+- **Work**: Invoke `linear-digest` subagent (do NOT run in background)
+- **Finances**: Invoke `finance-digest` subagent (do NOT run in background)
+- **Health**: Invoke `health-digest` subagent (do NOT run in background)
+- **Racing**: Invoke `sim-racing-digest` subagent (do NOT run in background)
+- **For You**: Invoke `for-you-digest` subagent (do NOT run in background)
 
-2. **Gather Data** (run in parallel where possible):
+2. **Synthesize** the outputs into sections:
 
-   - Tasks: Use Things MCP to get today, upcoming, projects
-   - Calendar: Run `~/scripts/calendar.sh` or use calendar MCP
-   - Notes: Read recent files from `~/Documents/Notes/`
-   - Health: Run `~/scripts/health.sh` if available
+- **TL;DR**: Bullet points (max 400 chars each) capturing essential state of life. Each bullet starts with a relevant emoji. Include financial snapshot, email highlights, upcoming events.
+  - For items with a clear next action, add a follow-up line:
+    ```
+    💰 **Item description here.**
+    ↳ **Clear next action here**
+    ```
+- **Now**: Very concise list of what needs attention. 3-6 items max, no fluff.
+- **For You**: Curated content from for-you-digest. Brief bullets with emojis and links.
+- **Top of Mind**: What's occupying mental bandwidth. Use emoji at the start of each paragraph.
+- **Health**: From health-digest. Can be bullets, each with a relevant emoji.
+- **Next**: Near-term priorities combined with longer-term goals.
 
-3. **Synthesize into Executive Digest** with these sections:
-
-   - **TL;DR**: 3-5 bullets capturing essential state of life right now
-   - **Now**: Imminent tasks and events needing attention
-   - **Next**: What to focus on based on priorities
-   - **Future**: Longer-term projects and goals
-
-4. **Write to File**:
-   - Save to `~/Documents/Notes/pulse.md`
-   - Include timestamp at top
-
-## Output Format
-
-Brief confirmation with the most notable items highlighted.
-
-## Formatting Rules
-
-- NO TABLES - use natural prose and bullet points
+3. **Formatting Rules**:
+- NO TABLES — use natural prose and bullet points
 - Use **bold** for emphasis on key terms
 - Keep it scannable but warm, like a personal briefing
-- Limit each section to 5-7 items max
-```
+- Make links clickable (Linear issues, Things tasks, emails)
 
-The resulting markdown file is synced via iCloud, so I can just open it on my iPhone while sipping coffee in the morning.
+4. **Write** to `~/Documents/Notes/life-pulse.md`
+
+5. Open the file when done: `open ~/Documents/Notes/life-pulse.md`
+````
+
+All the raw data stays contained in fast and cheap subagent runs (they use `haiku`). The main agent only sees the synthesized summaries and assembles everything into a coherent, readable digest.
+
+And because each subagent is a standalone file, I can invoke them directly to answer questions like "how's my health?" or "check my email".
+
+I've been reading my life pulse digest on my iPad every morning while sipping coffee for a while now, and it's been a great way to start the day.
 
 ## Example: Dynamic Calendars
 
