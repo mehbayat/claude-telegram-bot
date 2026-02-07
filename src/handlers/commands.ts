@@ -177,7 +177,7 @@ export async function handleResume(ctx: Context): Promise<void> {
   }
 
   if (session.isActive) {
-    await ctx.reply("Sessione già attiva. Usa /new per iniziare da capo.");
+    await ctx.reply("Session already active. Use /new to start fresh.");
     return;
   }
 
@@ -185,7 +185,7 @@ export async function handleResume(ctx: Context): Promise<void> {
   const sessions = session.getSessionList();
 
   if (sessions.length === 0) {
-    await ctx.reply("❌ Nessuna sessione salvata.");
+    await ctx.reply("❌ No saved sessions.");
     return;
   }
 
@@ -193,13 +193,14 @@ export async function handleResume(ctx: Context): Promise<void> {
   const buttons = sessions.map((s) => {
     // Format date: "18/01 10:30"
     const date = new Date(s.saved_at);
-    const dateStr = date.toLocaleDateString("it-IT", {
-      day: "2-digit",
-      month: "2-digit",
+    const dateStr = date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
     });
-    const timeStr = date.toLocaleTimeString("it-IT", {
+    const timeStr = date.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
+      hour12: false,
     });
 
     // Truncate title for button (max ~40 chars to fit)
@@ -214,7 +215,7 @@ export async function handleResume(ctx: Context): Promise<void> {
     ];
   });
 
-  await ctx.reply("📋 <b>Sessioni salvate</b>\n\nSeleziona una sessione da riprendere:", {
+  await ctx.reply("📋 <b>Saved Sessions</b>\n\nSelect a session to resume:", {
     parse_mode: "HTML",
     reply_markup: {
       inline_keyboard: buttons,

@@ -111,6 +111,27 @@ function buildSafetyPrompt(allowedPaths: string[]): string {
   return `
 CRITICAL SAFETY RULES FOR TELEGRAM BOT:
 
+## DEFAULT MODE: READ-ONLY
+
+By default, you operate in READ-ONLY mode. In this mode you may:
+- Read files, query databases (SELECT only), check status, run health checks
+- List files, search code, view logs, analyze data
+- Report findings and recommendations
+
+In READ-ONLY mode, you must NOT:
+- Edit, write, or create files
+- Run scripts that modify state (INSERT, UPDATE, DELETE)
+- Execute git commands that change anything (commit, push, checkout)
+- Run any destructive shell commands
+
+## EDIT MODE
+
+To enable writes, the user must explicitly say one of:
+- "edit mode" or "make changes" or "go ahead and edit" or "apply that"
+Edit mode applies ONLY to the specific change discussed. After completing the change, return to read-only mode.
+
+## GENERAL SAFETY RULES
+
 1. NEVER delete, remove, or overwrite files without EXPLICIT confirmation from the user.
    - If user asks to delete something, respond: "Are you sure you want to delete [file]? Reply 'yes delete it' to confirm."
    - Only proceed with deletion if user replies with explicit confirmation like "yes delete it", "confirm delete"
@@ -165,9 +186,9 @@ export const TRANSCRIPTION_AVAILABLE = !!OPENAI_API_KEY;
 // ============== Thinking Keywords ==============
 
 const thinkingKeywordsStr =
-  process.env.THINKING_KEYWORDS || "think,pensa,ragiona";
+  process.env.THINKING_KEYWORDS || "think,reason,analyze";
 const thinkingDeepKeywordsStr =
-  process.env.THINKING_DEEP_KEYWORDS || "ultrathink,think hard,pensa bene";
+  process.env.THINKING_DEEP_KEYWORDS || "ultrathink,think hard,deep think";
 
 export const THINKING_KEYWORDS = thinkingKeywordsStr
   .split(",")
