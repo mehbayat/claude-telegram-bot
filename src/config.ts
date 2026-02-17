@@ -92,6 +92,7 @@ const defaultAllowedPaths = [
   `${HOME}/Downloads`,
   `${HOME}/Desktop`,
   `${HOME}/.claude`, // Claude Code data (plans, settings)
+  `${HOME}/Library/LaunchAgents`, // LaunchAgent plists (read-only, for status checks)
 ];
 
 const allowedPathsStr = process.env.ALLOWED_PATHS || "";
@@ -207,6 +208,28 @@ export const TELEGRAM_MESSAGE_LIMIT = 4096; // Max characters per message
 export const TELEGRAM_SAFE_LIMIT = 4000; // Safe limit with buffer for formatting
 export const STREAMING_THROTTLE_MS = 500; // Throttle streaming updates
 export const BUTTON_LABEL_MAX_LENGTH = 30; // Max chars for inline button labels
+
+// ============== Long Polling Settings ==============
+
+const pollingTimeoutRaw = parseInt(
+  process.env.POLLING_TIMEOUT_SECONDS || "30",
+  10
+);
+export const POLLING_TIMEOUT_SECONDS =
+  Number.isFinite(pollingTimeoutRaw) && pollingTimeoutRaw > 0
+    ? pollingTimeoutRaw
+    : 30;
+
+const pollingMaxRetryRaw = parseInt(
+  process.env.POLLING_MAX_RETRY_MS || "600000",
+  10
+);
+export const POLLING_MAX_RETRY_MS =
+  Number.isFinite(pollingMaxRetryRaw) && pollingMaxRetryRaw > 0
+    ? pollingMaxRetryRaw
+    : 600000;
+
+export const POLLING_RETRY_INTERVAL: "exponential" = "exponential";
 
 // ============== Audit Logging ==============
 

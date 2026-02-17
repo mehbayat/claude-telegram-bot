@@ -6,7 +6,15 @@
 
 import { Bot } from "grammy";
 import { run, sequentialize } from "@grammyjs/runner";
-import { TELEGRAM_TOKEN, WORKING_DIR, ALLOWED_USERS, RESTART_FILE } from "./config";
+import {
+  TELEGRAM_TOKEN,
+  WORKING_DIR,
+  ALLOWED_USERS,
+  RESTART_FILE,
+  POLLING_TIMEOUT_SECONDS,
+  POLLING_MAX_RETRY_MS,
+  POLLING_RETRY_INTERVAL,
+} from "./config";
 import { unlinkSync, readFileSync, existsSync } from "fs";
 import {
   handleStart,
@@ -116,7 +124,15 @@ if (existsSync(RESTART_FILE)) {
 }
 
 // Start with concurrent runner (commands work immediately)
-const runner = run(bot);
+const runner = run(bot, {
+  runner: {
+    fetch: {
+      timeout: POLLING_TIMEOUT_SECONDS,
+    },
+    retryInterval: POLLING_RETRY_INTERVAL,
+    maxRetryTime: POLLING_MAX_RETRY_MS,
+  },
+});
 
 // Graceful shutdown
 const stopRunner = () => {
