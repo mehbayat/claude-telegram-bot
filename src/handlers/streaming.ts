@@ -63,7 +63,11 @@ export async function checkPendingAskUserRequests(
 
       if (options.length > 0 && requestId) {
         const keyboard = createAskUserKeyboard(requestId, options);
-        await ctx.reply(`❓ ${question}`, { reply_markup: keyboard });
+        try {
+          await ctx.reply(`❓ ${question}`, { reply_markup: keyboard });
+        } catch (error) {
+          console.warn("Failed to send ask-user prompt:", error);
+        }
         buttonsSent = true;
 
         // Mark as sent
@@ -86,6 +90,29 @@ export class StreamingState {
   toolMessages: Message[] = []; // kept for compatibility with existing handlers
   typingStarted = false;
   doneSent = false;
+}
+
+function isTelegramParseError(error: unknown): boolean {
+  const e = error as { message?: string; error_code?: number };
+  return (
+    (typeof e?.message === "string" && e.message.toLowerCase().includes("parse")) ||
+    e?.error_code === 400
+  );
+}
+
+async function replyHtmlWithFallback(
+  ctx: Context,
+  htmlText: string,
+  plainText: string
+): Promise<Message> {
+  try {
+    return await ctx.reply(htmlText, { parse_mode: "HTML" });
+  } catch (error) {
+    if (isTelegramParseError(error)) {
+      return await ctx.reply(plainText);
+    }
+    throw error;
+  }
 }
 
 function splitForTelegram(text: string, limit: number): string[] {
@@ -193,7 +220,7 @@ export function createStatusCallback(
         );
         for (const chunk of chunks) {
           const formatted = convertMarkdownToHtml(chunk);
-          await ctx.reply(formatted, { parse_mode: "HTML" });
+          await replyHtmlWithFallback(ctx, formatted, chunk);
         }
       }
     } catch (error) {
