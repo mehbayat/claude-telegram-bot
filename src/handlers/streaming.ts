@@ -8,11 +8,10 @@ import type { Context } from "grammy";
 import type { Message } from "grammy/types";
 import { InlineKeyboard } from "grammy";
 import type { StatusCallback } from "../types";
-import { convertMarkdownToHtml, escapeHtml } from "../formatting";
+import { convertMarkdownToHtml } from "../formatting";
 import {
   TELEGRAM_MESSAGE_LIMIT,
   TELEGRAM_SAFE_LIMIT,
-  STREAMING_THROTTLE_MS,
   BUTTON_LABEL_MAX_LENGTH,
 } from "../config";
 
@@ -83,10 +82,67 @@ export async function checkPendingAskUserRequests(
  * Tracks state for streaming message updates.
  */
 export class StreamingState {
-  textMessages = new Map<number, Message>(); // segment_id -> telegram message
-  toolMessages: Message[] = []; // ephemeral tool status messages
-  lastEditTimes = new Map<number, number>(); // segment_id -> last edit time
-  lastContent = new Map<number, string>(); // segment_id -> last sent content
+  segments = new Map<number, string>(); // segment_id -> text content
+  toolMessages: Message[] = []; // kept for compatibility with existing handlers
+  typingStarted = false;
+  doneSent = false;
+}
+
+function splitForTelegram(text: string, limit: number): string[] {
+  if (text.length <= limit) return [text];
+
+  const chunks: string[] = [];
+  const paragraphs = text.split(/\n\s*\n/);
+  let current = "";
+
+  for (const rawParagraph of paragraphs) {
+    const paragraph = rawParagraph.trim();
+    if (!paragraph) continue;
+
+    const candidate = current ? `${current}\n\n${paragraph}` : paragraph;
+    if (candidate.length <= limit) {
+      current = candidate;
+      continue;
+    }
+
+    if (current) {
+      chunks.push(current);
+      current = "";
+    }
+
+    if (paragraph.length <= limit) {
+      current = paragraph;
+      continue;
+    }
+
+    // Fallback for long paragraphs: split by line, then by hard limit.
+    for (const line of paragraph.split("\n")) {
+      const lineText = line.trim();
+      if (!lineText) continue;
+
+      if (lineText.length <= limit) {
+        const withLine = current ? `${current}\n${lineText}` : lineText;
+        if (withLine.length <= limit) {
+          current = withLine;
+        } else {
+          if (current) chunks.push(current);
+          current = lineText;
+        }
+        continue;
+      }
+
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      for (let i = 0; i < lineText.length; i += limit) {
+        chunks.push(lineText.slice(i, i + limit));
+      }
+    }
+  }
+
+  if (current) chunks.push(current);
+  return chunks.length > 0 ? chunks : [text.slice(0, limit)];
 }
 
 /**
@@ -98,130 +154,46 @@ export function createStatusCallback(
 ): StatusCallback {
   return async (statusType: string, content: string, segmentId?: number) => {
     try {
-      if (statusType === "thinking") {
-        // Show thinking inline, compact (first 500 chars)
-        const preview =
-          content.length > 500 ? content.slice(0, 500) + "..." : content;
-        const escaped = escapeHtml(preview);
-        const thinkingMsg = await ctx.reply(`🧠 <i>${escaped}</i>`, {
-          parse_mode: "HTML",
-        });
-        state.toolMessages.push(thinkingMsg);
-      } else if (statusType === "tool") {
-        const toolMsg = await ctx.reply(content, { parse_mode: "HTML" });
-        state.toolMessages.push(toolMsg);
-      } else if (statusType === "text" && segmentId !== undefined) {
-        const now = Date.now();
-        const lastEdit = state.lastEditTimes.get(segmentId) || 0;
-
-        if (!state.textMessages.has(segmentId)) {
-          // New segment - create message
-          const display =
-            content.length > TELEGRAM_SAFE_LIMIT
-              ? content.slice(0, TELEGRAM_SAFE_LIMIT) + "..."
-              : content;
-          const formatted = convertMarkdownToHtml(display);
-          try {
-            const msg = await ctx.reply(formatted, { parse_mode: "HTML" });
-            state.textMessages.set(segmentId, msg);
-            state.lastContent.set(segmentId, formatted);
-          } catch (htmlError) {
-            // HTML parse failed, fall back to plain text
-            console.debug("HTML reply failed, using plain text:", htmlError);
-            const msg = await ctx.reply(formatted);
-            state.textMessages.set(segmentId, msg);
-            state.lastContent.set(segmentId, formatted);
-          }
-          state.lastEditTimes.set(segmentId, now);
-        } else if (now - lastEdit > STREAMING_THROTTLE_MS) {
-          // Update existing segment message (throttled)
-          const msg = state.textMessages.get(segmentId)!;
-          const display =
-            content.length > TELEGRAM_SAFE_LIMIT
-              ? content.slice(0, TELEGRAM_SAFE_LIMIT) + "..."
-              : content;
-          const formatted = convertMarkdownToHtml(display);
-          // Skip if content unchanged
-          if (formatted === state.lastContent.get(segmentId)) {
-            return;
-          }
-          try {
-            await ctx.api.editMessageText(
-              msg.chat.id,
-              msg.message_id,
-              formatted,
-              {
-                parse_mode: "HTML",
-              }
-            );
-            state.lastContent.set(segmentId, formatted);
-          } catch (htmlError) {
-            console.debug("HTML edit failed, trying plain text:", htmlError);
-            try {
-              await ctx.api.editMessageText(
-                msg.chat.id,
-                msg.message_id,
-                formatted
-              );
-              state.lastContent.set(segmentId, formatted);
-            } catch (editError) {
-              console.debug("Edit message failed:", editError);
-            }
-          }
-          state.lastEditTimes.set(segmentId, now);
+      if (!state.typingStarted) {
+        const chatId = ctx.chat?.id;
+        if (chatId !== undefined) {
+          await ctx.api.sendChatAction(chatId, "typing");
+          state.typingStarted = true;
         }
-      } else if (statusType === "segment_end" && segmentId !== undefined) {
-        if (state.textMessages.has(segmentId) && content) {
-          const msg = state.textMessages.get(segmentId)!;
-          const formatted = convertMarkdownToHtml(content);
+      }
 
-          // Skip if content unchanged
-          if (formatted === state.lastContent.get(segmentId)) {
-            return;
-          }
+      // Silent accumulator: skip intermediary thinking/tool status messages.
+      if (statusType === "thinking" || statusType === "tool") {
+        return;
+      }
 
-          if (formatted.length <= TELEGRAM_MESSAGE_LIMIT) {
-            try {
-              await ctx.api.editMessageText(
-                msg.chat.id,
-                msg.message_id,
-                formatted,
-                {
-                  parse_mode: "HTML",
-                }
-              );
-            } catch (error) {
-              console.debug("Failed to edit final message:", error);
-            }
-          } else {
-            // Too long - delete and split
-            try {
-              await ctx.api.deleteMessage(msg.chat.id, msg.message_id);
-            } catch (error) {
-              console.debug("Failed to delete message for splitting:", error);
-            }
-            for (let i = 0; i < formatted.length; i += TELEGRAM_SAFE_LIMIT) {
-              const chunk = formatted.slice(i, i + TELEGRAM_SAFE_LIMIT);
-              try {
-                await ctx.reply(chunk, { parse_mode: "HTML" });
-              } catch (htmlError) {
-                console.debug(
-                  "HTML chunk failed, using plain text:",
-                  htmlError
-                );
-                await ctx.reply(chunk);
-              }
-            }
-          }
+      if (
+        (statusType === "text" || statusType === "segment_end") &&
+        segmentId !== undefined
+      ) {
+        if (content) {
+          state.segments.set(segmentId, content);
         }
-      } else if (statusType === "done") {
-        // Delete tool messages - text messages stay
-        for (const toolMsg of state.toolMessages) {
-          try {
-            await ctx.api.deleteMessage(toolMsg.chat.id, toolMsg.message_id);
-          } catch (error) {
-            console.debug("Failed to delete tool message:", error);
-          }
+        return;
+      }
+
+      if (statusType === "done" && !state.doneSent) {
+        state.doneSent = true;
+        const orderedText = [...state.segments.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([, value]) => value)
+          .join("")
+          .trim();
+
+        if (!orderedText) return;
+
+        const chunks = splitForTelegram(
+          orderedText,
+          Math.min(TELEGRAM_SAFE_LIMIT, TELEGRAM_MESSAGE_LIMIT)
+        );
+        for (const chunk of chunks) {
+          const formatted = convertMarkdownToHtml(chunk);
+          await ctx.reply(formatted, { parse_mode: "HTML" });
         }
       }
     } catch (error) {
